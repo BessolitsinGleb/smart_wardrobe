@@ -1,0 +1,271 @@
+<!DOCTYPE html>
+<html lang="ru">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Smart Wardrobe</title>
+  <link rel="stylesheet" href="/style.css" />
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&display=swap" rel="stylesheet" />
+</head>
+<body>
+<div id="app">
+
+  <!-- ══ CREATE USER MODAL ══════════════════════════════════════════════════ -->
+  <div v-if="showCreateUser" class="overlay">
+    <div class="modal modal--auth">
+      <div class="modal__logo">👗</div>
+      <h2 class="modal__title">Smart Wardrobe</h2>
+      <p class="modal__sub">Создай аккаунт и начни собирать свой цифровой гардероб</p>
+      <div class="form-group">
+        <label>Имя пользователя</label>
+        <input v-model="createUserForm.username" type="text" placeholder="coolstyle" @keyup.enter="createUser" />
+      </div>
+      <div class="form-group">
+        <label>Email</label>
+        <input v-model="createUserForm.email" type="email" placeholder="you@email.com" @keyup.enter="createUser" />
+      </div>
+      <div class="form-group">
+        <label>Пароль</label>
+        <input v-model="createUserForm.password" type="password" placeholder="••••••" @keyup.enter="createUser" />
+      </div>
+      <p v-if="createUserError" class="form-error">{{ createUserError }}</p>
+      <button class="btn btn--primary btn--full" @click="createUser" :disabled="creatingUser">
+        <span v-if="creatingUser">Создание...</span>
+        <span v-else>Создать аккаунт ✨</span>
+      </button>
+    </div>
+  </div>
+
+  <!-- ══ MAIN APP ═══════════════════════════════════════════════════════════ -->
+  <template v-if="currentUser">
+
+    <!-- Header -->
+    <header class="header">
+      <div class="header__logo">👗 Smart Wardrobe</div>
+      <nav class="nav">
+        <button class="nav__btn" :class="{ active: activeTab === 'wardrobe' }" @click="activeTab = 'wardrobe'">
+          Гардероб <span class="nav__badge" v-if="clothes.length">{{ clothes.length }}</span>
+        </button>
+        <button class="nav__btn" :class="{ active: activeTab === 'generate' }" @click="activeTab = 'generate'">
+          ✨ Аутфит
+        </button>
+        <button class="nav__btn" :class="{ active: activeTab === 'history' }" @click="activeTab = 'history'; fetchOutfits()">
+          История <span class="nav__badge" v-if="outfits.length">{{ outfits.length }}</span>
+        </button>
+      </nav>
+      <div class="header__user">
+        <span class="header__username">{{ currentUser.username }}</span>
+        <button class="btn btn--ghost btn--sm" @click="logout">Выйти</button>
+      </div>
+    </header>
+
+    <!-- ── WARDROBE TAB ───────────────────────────────────────────────── -->
+    <main v-show="activeTab === 'wardrobe'" class="page">
+      <div class="page__toolbar">
+        <div class="filters">
+          <button class="chip" :class="{ active: !seasonFilter }" @click="seasonFilter = null">Всё</button>
+          <button v-for="s in seasons" :key="s.value"
+            class="chip" :class="{ active: seasonFilter === s.value }"
+            @click="seasonFilter = s.value">
+            {{ s.emoji }} {{ s.label }}
+          </button>
+        </div>
+        <button class="btn btn--primary" @click="showUploadModal = true">+ Добавить вещь</button>
+      </div>
+
+      <div v-if="filteredClothes.length" class="clothes-grid">
+        <div v-for="item in filteredClothes" :key="item.id" class="clothes-card">
+          <div class="clothes-card__img-wrap">
+            <img :src="item.image_url" :alt="item.name" class="clothes-card__img" loading="lazy" />
+            <div class="clothes-card__overlay">
+              <button class="icon-btn icon-btn--danger" @click="deleteClothes(item)" title="Удалить">🗑</button>
+            </div>
+          </div>
+          <div class="clothes-card__body">
+            <div class="clothes-card__type">{{ getTypeEmoji(item.clothing_type) }} {{ getTypeLabel(item.clothing_type) }}</div>
+            <div class="clothes-card__name">{{ item.name }}</div>
+            <div class="clothes-card__meta">
+              <span class="rating-pill" :style="{ background: ratingGradient(item.rating) }">★ {{ item.rating }}</span>
+              <span class="season-pill">{{ getSeasonEmoji(item.season) }}</span>
+            </div>
+            <div v-if="item.brand" class="clothes-card__brand">{{ item.brand }}</div>
+            <div v-if="item.comment" class="clothes-card__comment">"{{ item.comment }}"</div>
+          </div>
+        </div>
+      </div>
+
+      <div v-else class="empty-state">
+        <div class="empty-state__icon">👔</div>
+        <p class="empty-state__text">Гардероб пуст</p>
+        <p class="empty-state__sub">Добавь первую вещь, нажав кнопку выше</p>
+      </div>
+    </main>
+
+    <!-- ── GENERATE TAB ───────────────────────────────────────────────── -->
+    <main v-show="activeTab === 'generate'" class="page">
+      <div class="generate-layout">
+        <div class="generate-form card">
+          <h2 class="card__title">Собери аутфит с ИИ</h2>
+          <p class="card__sub">ИИ выберет вещи из твоего гардероба и объяснит, почему это круто</p>
+
+          <div class="form-group">
+            <label>Сезон <span class="optional">(необязательно)</span></label>
+            <select v-model="generateForm.season">
+              <option value="">Любой</option>
+              <option v-for="s in seasons" :key="s.value" :value="s.value">{{ s.emoji }} {{ s.label }}</option>
+            </select>
+          </div>
+
+          <div class="form-group">
+            <label>Повод <span class="optional">(необязательно)</span></label>
+            <input v-model="generateForm.occasion" type="text" placeholder="casual, formal, sport, date night..." />
+          </div>
+
+          <p v-if="generateError" class="form-error">{{ generateError }}</p>
+
+          <button class="btn btn--primary btn--full btn--lg" @click="generateOutfit" :disabled="isGenerating || clothes.length < 3">
+            <span v-if="isGenerating" class="spinner-inline"></span>
+            <span v-if="isGenerating">Стилист работает...</span>
+            <span v-else-if="clothes.length < 3">Добавь хотя бы 3 вещи</span>
+            <span v-else>✨ Создать аутфит</span>
+          </button>
+        </div>
+
+        <!-- Result -->
+        <transition name="fade-up">
+          <div v-if="generatedOutfit" class="outfit-result card">
+            <div class="outfit-result__header">
+              <h3 class="outfit-result__name">{{ generatedOutfit.name || 'Твой аутфит' }}</h3>
+              <button class="icon-btn icon-btn--danger" @click="deleteOutfit(generatedOutfit)" title="Удалить">🗑</button>
+            </div>
+            <div class="outfit-photos">
+              <div v-for="item in generatedOutfit.items" :key="item.clothes.id" class="outfit-photo">
+                <img :src="item.clothes.image_url" :alt="item.clothes.name" />
+                <span>{{ getTypeEmoji(item.clothes.clothing_type) }} {{ item.clothes.name }}</span>
+              </div>
+            </div>
+            <div class="ai-comment">
+              <div class="ai-comment__icon">🤖</div>
+              <p>{{ generatedOutfit.ai_comment }}</p>
+            </div>
+          </div>
+        </transition>
+      </div>
+    </main>
+
+    <!-- ── HISTORY TAB ────────────────────────────────────────────────── -->
+    <main v-show="activeTab === 'history'" class="page">
+      <h2 class="page__title">История аутфитов</h2>
+
+      <div v-if="outfits.length" class="outfits-list">
+        <div v-for="outfit in outfits" :key="outfit.id" class="outfit-card card">
+          <div class="outfit-card__header">
+            <div>
+              <div class="outfit-card__name">{{ outfit.name || 'Аутфит' }}</div>
+              <div class="outfit-card__date">{{ formatDate(outfit.created_at) }}
+                <span v-if="outfit.season" class="season-pill ml-4">{{ getSeasonEmoji(outfit.season) }} {{ getSeasonLabel(outfit.season) }}</span>
+              </div>
+            </div>
+            <button class="icon-btn icon-btn--danger" @click="deleteOutfit(outfit)">🗑</button>
+          </div>
+          <div class="outfit-photos outfit-photos--sm">
+            <div v-for="item in outfit.items" :key="item.clothes.id" class="outfit-photo outfit-photo--sm">
+              <img :src="item.clothes.image_url" :alt="item.clothes.name" />
+              <span>{{ getTypeEmoji(item.clothes.clothing_type) }}</span>
+            </div>
+          </div>
+          <div class="ai-comment ai-comment--compact">
+            <div class="ai-comment__icon">🤖</div>
+            <p>{{ outfit.ai_comment }}</p>
+          </div>
+        </div>
+      </div>
+
+      <div v-else class="empty-state">
+        <div class="empty-state__icon">✨</div>
+        <p class="empty-state__text">Нет сохранённых аутфитов</p>
+        <p class="empty-state__sub">Перейди на вкладку «Аутфит» чтобы создать первый</p>
+        <button class="btn btn--primary mt-16" @click="activeTab = 'generate'">Создать аутфит</button>
+      </div>
+    </main>
+
+  </template><!-- /currentUser -->
+
+  <!-- ══ UPLOAD MODAL ═══════════════════════════════════════════════════════ -->
+  <div v-if="showUploadModal" class="overlay" @click.self="closeUploadModal">
+    <div class="modal modal--upload">
+      <div class="modal__header">
+        <h3>Добавить вещь</h3>
+        <button class="icon-btn" @click="closeUploadModal">✕</button>
+      </div>
+
+      <!-- Image drop zone -->
+      <div class="dropzone" @click="$refs.fileInput.click()" @dragover.prevent @drop.prevent="onDrop">
+        <img v-if="uploadForm.preview" :src="uploadForm.preview" class="dropzone__preview" />
+        <div v-else class="dropzone__placeholder">
+          <span class="dropzone__icon">📷</span>
+          <span>Нажми или перетащи фото</span>
+          <span class="dropzone__sub">Конвертируется в JPG</span>
+        </div>
+      </div>
+      <input ref="fileInput" type="file" accept="image/*" style="display:none" @change="onFileChange" />
+
+      <div class="upload-form-grid">
+        <div class="form-group">
+          <label>Название *</label>
+          <input v-model="uploadForm.name" type="text" placeholder="Белая Nike Air Force" />
+        </div>
+        <div class="form-group">
+          <label>Тип одежды *</label>
+          <select v-model="uploadForm.clothing_type">
+            <option v-for="t in clothingTypes" :key="t.value" :value="t.value">{{ t.emoji }} {{ t.label }}</option>
+          </select>
+        </div>
+        <div class="form-group">
+          <label>Сезон</label>
+          <select v-model="uploadForm.season">
+            <option v-for="s in seasons" :key="s.value" :value="s.value">{{ s.emoji }} {{ s.label }}</option>
+          </select>
+        </div>
+        <div class="form-group">
+          <label>Цвет</label>
+          <input v-model="uploadForm.color" type="text" placeholder="Белый" />
+        </div>
+        <div class="form-group">
+          <label>Бренд</label>
+          <input v-model="uploadForm.brand" type="text" placeholder="Nike" />
+        </div>
+        <div class="form-group form-group--full">
+          <label>Комментарий</label>
+          <input v-model="uploadForm.comment" type="text" placeholder="Хорошо сочетается с джинсами..." />
+        </div>
+        <div class="form-group form-group--full">
+          <label>Рейтинг: <strong>{{ uploadForm.rating }}</strong>/10</label>
+          <input v-model.number="uploadForm.rating" type="range" min="1" max="10" step="0.5" class="slider" />
+          <div class="slider-labels"><span>1 — не люблю</span><span>10 — обожаю</span></div>
+        </div>
+      </div>
+
+      <p v-if="uploadError" class="form-error">{{ uploadError }}</p>
+
+      <div class="modal__footer">
+        <button class="btn btn--ghost" @click="closeUploadModal">Отмена</button>
+        <button class="btn btn--primary" @click="uploadClothes" :disabled="isUploading">
+          <span v-if="isUploading" class="spinner-inline"></span>
+          {{ isUploading ? 'Загрузка...' : 'Добавить в гардероб' }}
+        </button>
+      </div>
+    </div>
+  </div>
+
+  <!-- ══ TOAST ══════════════════════════════════════════════════════════════ -->
+  <transition name="toast">
+    <div v-if="toast" class="toast" :class="`toast--${toast.type}`">{{ toast.message }}</div>
+  </transition>
+
+</div><!-- /#app -->
+
+<script src="https://unpkg.com/vue@3/dist/vue.global.prod.js"></script>
+<script src="/app.js"></script>
+</body>
+</html>

@@ -1,14 +1,24 @@
-from sqlalchemy.ext.asyncio import AsyncSession, create_async_engine, async_sessionmaker
-from .core.config import Settings 
-from sqlalchemy.orm import DeclarativeBase
+import os
+from sqlalchemy import create_engine
+from sqlalchemy.orm import sessionmaker, DeclarativeBase
+from dotenv import load_dotenv
 
+load_dotenv()
 
-engine = create_async_engine(Settings.DB_URL, echo = True)
-async_session = async_sessionmaker(engine, expire_on_commit= False, class_= AsyncSession)
+DATABASE_URL = os.getenv("DATABASE_URL", "sqlite:///./wardrobe.db")
+
+connect_args = {"check_same_thread": False} if DATABASE_URL.startswith("sqlite") else {}
+engine = create_engine(DATABASE_URL, connect_args=connect_args)
+SessionLocal = sessionmaker(autocommit=False, autoflush=False, bind=engine)
+
 
 class Base(DeclarativeBase):
     pass
 
-async def get_db():
-    async with async_session() as session:
-        yield session
+
+def get_db():
+    db = SessionLocal()
+    try:
+        yield db
+    finally:
+        db.close()
