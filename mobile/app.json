@@ -1,0 +1,31 @@
+{
+  "expo": {
+    "name": "Smart Wardrobe",
+    "slug": "smart-wardrobe",
+    "version": "1.0.0",
+    "orientation": "portrait",
+    "userInterfaceStyle": "dark",
+    "splash": {
+      "backgroundColor": "#0f0f1a"
+    },
+    "ios": {
+      "supportsTablet": false,
+      "bundleIdentifier": "com.smartwardrobe.app"
+    },
+    "android": {
+      "package": "com.smartwardrobe.app",
+      "adaptiveIcon": {
+        "backgroundColor": "#0f0f1a"
+      }
+    },
+    "plugins": [
+      [
+        "expo-image-picker",
+        {
+          "photosPermission": "Разреши доступ к фотографиям для добавления одежды.",
+          "cameraPermission": "Разреши использовать камеру для фото одежды."
+        }
+      ]
+    ]
+  }
+}
